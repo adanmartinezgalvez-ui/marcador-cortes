@@ -111,7 +111,7 @@ kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-b
     <label class="f">Entrevistado<input type="text" id="who" placeholder="Nombre de quien habla"></label>
     <label class="f">Nota <small>qué dice, para encontrarlo rápido</small><input type="text" id="note" placeholder="Ej. explica por qué no usar elevadores"></label>
     <button class="btn" type="button" id="add">Agregar fragmento (Enter)</button>
-    <p class="note">Atajos: <kbd>espacio</kbd> reproduce o pausa · <kbd>I</kbd> entrada · <kbd>O</kbd> salida · <kbd>←</kbd> <kbd>→</kbd> 5 segundos · <kbd>Enter</kbd> agrega.</p>
+    <p class="note" id="kbdnote">Atajos (con el cursor fuera de los campos de texto): <kbd>espacio</kbd> reproduce o pausa · <kbd>I</kbd> entrada · <kbd>O</kbd> salida · <kbd>←</kbd> <kbd>→</kbd> 5 segundos · <kbd>Enter</kbd> agrega.</p>
   </div>
 </div>
 
@@ -164,7 +164,7 @@ let ytReady=null;
 function loadYT(){ if(ytReady) return ytReady; ytReady=new Promise((res,rej)=>{ window.onYouTubeIframeAPIReady=()=>res(); const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; s.onerror=()=>rej(new Error("yt")); document.head.appendChild(s); }); return ytReady; }
 let fbReady=null;
 function loadFB(){ if(fbReady) return fbReady; fbReady=new Promise((res,rej)=>{ window.fbAsyncInit=()=>{ FB.init({xfbml:false,version:"v19.0"}); res(); }; const s=document.createElement("script"); s.src="https://connect.facebook.net/es_LA/sdk.js"; s.async=true; s.crossOrigin="anonymous"; s.onerror=()=>rej(new Error("fb")); document.body.appendChild(s); }); return fbReady; }
-async function setLink(u){
+async function setLink(u){ try{ document.activeElement&&document.activeElement.blur(); }catch(e){}
   const i=parseUrl(u); if(!i){ toast("Ese enlace no es de YouTube ni de Facebook"); return; }
   hideAll(); info=i; P=nullP; $("#srcname").textContent=i.p+" · cargando…"; $("#openv").href=i.base; $("#openv").hidden=false; setKey("url-"+slug(i.base));
   store.set("mcw-last",{m:"link",u});
@@ -216,7 +216,17 @@ $("#add").addEventListener("click",add);
 document.addEventListener("keydown",e=>{ const ae=document.activeElement, typing=/INPUT|TEXTAREA|SELECT/.test(ae.tagName);
   if(e.key==="Enter"&&ae.id==="url"){ e.preventDefault(); setLink($("#url").value); return; }
   if(e.key==="Enter"&&(!typing||ae.id==="note"||ae.id==="who")){ e.preventDefault(); add(); return; } if(typing) return;
-  const k=e.key.toLowerCase(); if(k===" "){ e.preventDefault(); $("#play").click(); } else if(k==="i") $("#bin").click(); else if(k==="o") $("#bout").click(); else if(e.key==="ArrowLeft") $("#back").click(); else if(e.key==="ArrowRight") $("#fwd").click(); });
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  const k=(e.key||"").toLowerCase(), c=e.code;
+  if(k===" "||c==="Space"){ e.preventDefault(); $("#play").click(); }
+  else if(k==="i"||c==="KeyI"){ e.preventDefault(); $("#bin").click(); flash("#bin"); }
+  else if(k==="o"||c==="KeyO"){ e.preventDefault(); $("#bout").click(); flash("#bout"); }
+  else if(e.key==="ArrowLeft"){ e.preventDefault(); $("#back").click(); }
+  else if(e.key==="ArrowRight"){ e.preventDefault(); $("#fwd").click(); } });
+function flash(sel){ const b=$(sel); b.style.background="var(--soft)"; setTimeout(()=>b.style.background="",250); }
+/* El reproductor de YouTube/Facebook es otra página: si se queda con el foco, las teclas no llegan aquí. Lo devolvemos. */
+window.addEventListener("blur",()=>{ setTimeout(()=>{ const a=document.activeElement; if(a&&a.tagName==="IFRAME"){ a.blur(); window.focus(); } },120); });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ const a=document.activeElement; if(a&&a.tagName==="IFRAME") a.blur(); } });
 setInterval(()=>{ if(!P||P===nullP) return; const t=P.cur(); $("#now").textContent=tc(t); if(stopAt!=null&&t>=stopAt){ P.pause(); stopAt=null; } updPlay(); },100);
 
 /* ---------- exportar ---------- */
@@ -232,7 +242,8 @@ $("#clear").addEventListener("click",()=>{ if(!clips.length) return; if(!armed){
 /* ---------- fuente ---------- */
 seg($("#src"),m=>{ const L=m==="link"; $("#linkrow").hidden=!L; if(!L&&!P){ $("#empty").hidden=false; } if(L) $("#url").focus(); });
 $("#useurl").addEventListener("click",()=>setLink($("#url").value));
-$("#file").addEventListener("change",e=>setFile(e.target.files[0]));
+$("#file").addEventListener("change",e=>{ setFile(e.target.files[0]); e.target.blur(); });
+document.addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setTimeout(()=>b.blur(),0); });
 const st=$("#stage"); ["dragover","dragenter"].forEach(t=>st.addEventListener(t,e=>{e.preventDefault();st.classList.add("over");}));
 ["dragleave","drop"].forEach(t=>st.addEventListener(t,e=>{e.preventDefault();st.classList.remove("over"); if(t==="drop"&&e.dataTransfer.files[0]){ $$("#src button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v==="file"))); $("#linkrow").hidden=true; setFile(e.dataTransfer.files[0]); }}));
 $("#who").value=store.get("mcw-who","");
